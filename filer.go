@@ -4,10 +4,13 @@ package filer
 
 import (
 	"bufio"
+	"fmt"
 	"mime"
 	"net/http"
 	"os"
 	"path"
+	"path/filepath"
+	"strings"
 )
 
 // Filer serves files from a local directory.
@@ -20,7 +23,17 @@ type Filer struct {
 // occured.
 func (f *Filer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	p := path.Join(f.dir, r.URL.String())
+
+	p = filepath.Clean(p)
+
+	if !strings.HasPrefix(p, f.dir) {
+		w.WriteHeader(http.StatusForbidden)
+		return
+	}
+
 	file, err := os.Open(p)
+
+	fmt.Println(p)
 
 	if os.IsNotExist(err) {
 		w.WriteHeader(http.StatusNotFound)
@@ -46,6 +59,12 @@ func (f *Filer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 // New creates a new filer.
-func New(d string) *Filer {
-	return &Filer{dir: d}
+func New(d string) (*Filer, error) {
+	wd, err := os.Getwd()
+	if err != nil {
+		return nil, err
+	}
+
+	p := path.Join(wd, d)
+	return &Filer{dir: p}, nil
 }
