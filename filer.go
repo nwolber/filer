@@ -6,7 +6,6 @@ package filer
 
 import (
 	"bufio"
-	"fmt"
 	"mime"
 	"net/http"
 	"os"
@@ -34,8 +33,6 @@ func (f *Filer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	file, err := os.Open(p)
-
-	fmt.Println(p)
 
 	if os.IsNotExist(err) {
 		w.WriteHeader(http.StatusNotFound)
