@@ -26,6 +26,9 @@ var tests = []struct {
 	{"tests", "../filer_test.go", http.StatusForbidden},
 	{"tests", "invalid.js", http.StatusNotFound},
 	{"tests", "test.js", http.StatusOK},
+	// should redirect to index.html
+	{"tests", "/", http.StatusOK},
+	{"tests", "", http.StatusOK},
 }
 
 func TestServeHTTP(t *testing.T) {
