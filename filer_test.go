@@ -12,7 +12,7 @@ import (
 )
 
 func TestNew(t *testing.T) {
-	s, _ := New("")
+	s, _ := NewFileSystemFiler("")
 	if s == nil {
 		t.Error("A static server should be creatable at all times.")
 	}
@@ -34,7 +34,7 @@ var tests = []struct {
 func TestServeHTTP(t *testing.T) {
 	for _, tt := range tests {
 		req, _ := http.NewRequest("GET", tt.url, nil)
-		s, _ := New(tt.dir)
+		s, _ := NewFileSystemFiler(tt.dir)
 		rec := httptest.NewRecorder()
 
 		s.ServeHTTP(rec, req)

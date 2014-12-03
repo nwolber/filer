@@ -2,12 +2,13 @@
 // This file is licensed under the MIT license.
 // See the LICENSE file for more information.
 
+// Package filer contains a simple HTTP server for static resources.
 package filer
 
 import (
 	"bufio"
 	"errors"
-	"mime"
+	"io"
 	"net/http"
 	"os"
 	"path"
@@ -15,14 +16,20 @@ import (
 	"strings"
 )
 
-// Filer serves files from a local directory.
+// A Filer serves static resources.
 type Filer struct {
-	dir string
+	a Asseter
 }
 
 var (
 	errorForbidden = errors.New("Forbidden")
+	errorNoFile    = errors.New("No file")
 )
+
+// An Asseter resolves resources by name.
+type Asseter interface {
+	Asset(name string) (io.Reader, error)
+}
 
 // ServeHTTP returns files from the file system. The file has to be located in the directory configured to the
 // static server or a subdirectory. HTTP errors are raised if the requested file does not exist or another error
@@ -42,53 +49,66 @@ func (f *Filer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// New creates a new filer. It will serve files relative to the current working directory.
-func New(d string) (*Filer, error) {
+// New creates a new filer which uses the Asseter to retrieve assets.
+func New(a Asseter) (*Filer, error) {
+	return &Filer{a: a}, nil
+}
+
+// NewFileSystemFiler creates a new filer. It will serve files relative to the current working directory.
+func NewFileSystemFiler(d string) (*Filer, error) {
 	wd, err := os.Getwd()
 	if err != nil {
 		return nil, err
 	}
 
 	p := path.Join(wd, d)
-	return &Filer{dir: p}, nil
+	return &Filer{a: &fs{dir: p}}, nil
 }
 
 func (f *Filer) serveFile(w http.ResponseWriter, r *http.Request) error {
-	p := path.Join(f.dir, r.URL.String())
+	var file io.Reader
+	var err error
+	if file, err = f.a.Asset(r.URL.String()); err == errorNoFile {
+		if file, err = f.a.Asset(path.Join(r.URL.String(), "index.html")); err != nil {
+			return nil
+		}
+	} else if err != nil {
+		return err
+	}
+
+	reader := bufio.NewReader(file)
+	reader.WriteTo(w)
+	return nil
+}
+
+type fs struct {
+	dir string
+}
+
+func (fs *fs) Asset(name string) (io.Reader, error) {
+	p := path.Join(fs.dir, name)
 
 	p = filepath.Clean(p)
 
-	if !strings.HasPrefix(p, f.dir) {
-		return errorForbidden
+	if !strings.HasPrefix(p, fs.dir) {
+		return nil, errorForbidden
 	}
 
 	file, err := os.Open(p)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	defer file.Close()
 
 	d, err := file.Stat()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if d.IsDir() {
-		file, err = os.Open(path.Join(p, "index.html"))
-		if err != nil {
-			return err
-		}
+		return nil, errorNoFile
 	}
 
-	_, haveType := w.Header()["Content-Type"]
-	if !haveType {
-		if t := mime.TypeByExtension(path.Ext(p)); t != "" {
-			w.Header().Set("Content-Type", t)
-		}
-	}
-
-	reader := bufio.NewReader(file)
-	reader.WriteTo(w)
-	return nil
+	return file, nil
 }
