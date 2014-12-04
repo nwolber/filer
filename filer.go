@@ -68,7 +68,7 @@ func NewFileSystemFiler(d string) (*Filer, error) {
 func (f *Filer) serveFile(w http.ResponseWriter, r *http.Request) error {
 	var file io.Reader
 	var err error
-	if file, err = f.a.Asset(r.URL.String()); err == errorNoFile {
+	if file, err = f.a.Asset(r.URL.String()); err != nil {
 		if file, err = f.a.Asset(path.Join(r.URL.String(), "index.html")); err != nil {
 			return nil
 		}
