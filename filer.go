@@ -28,6 +28,7 @@ var (
 
 // An Asseter resolves resources by name.
 type Asseter interface {
+	IsDir(name string) (bool, error)
 	Asset(name string) (io.Reader, error)
 }
 
@@ -68,12 +69,17 @@ func NewFileSystemFiler(d string) (*Filer, error) {
 func (f *Filer) serveFile(w http.ResponseWriter, r *http.Request) error {
 	var file io.Reader
 	var err error
-	if file, err = f.a.Asset(r.URL.String()); err != nil {
-		if file, err = f.a.Asset(path.Join(r.URL.String(), "index.html")); err != nil {
-			return nil
-		}
+
+	p := r.URL.String()
+
+	if d, err := f.a.IsDir(p); d && err == nil {
+		p = path.Join(p, "index.html")
 	} else if err != nil {
 		return err
+	}
+
+	if file, err = f.a.Asset(p); err != nil {
+		return os.ErrNotExist
 	}
 
 	reader := bufio.NewReader(file)
@@ -111,4 +117,23 @@ func (fs *fs) Asset(name string) (io.Reader, error) {
 	}
 
 	return file, nil
+}
+
+func (fs *fs) IsDir(name string) (bool, error) {
+	p := path.Join(fs.dir, name)
+	p = filepath.Clean(p)
+
+	file, err := os.Open(p)
+	if err != nil {
+		return false, err
+	}
+
+	defer file.Close()
+
+	d, err := file.Stat()
+	if err != nil {
+		return false, err
+	}
+
+	return d.IsDir(), nil
 }
