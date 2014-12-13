@@ -123,6 +123,10 @@ func (fs *fs) IsDir(name string) (bool, error) {
 	p := path.Join(fs.dir, name)
 	p = filepath.Clean(p)
 
+	if !strings.HasPrefix(p, fs.dir) {
+		return false, errorForbidden
+	}
+
 	file, err := os.Open(p)
 	if err != nil {
 		return false, err
