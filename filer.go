@@ -9,6 +9,7 @@ import (
 	"bufio"
 	"errors"
 	"io"
+	"mime"
 	"net/http"
 	"os"
 	"path"
@@ -80,6 +81,13 @@ func (f *Filer) serveFile(w http.ResponseWriter, r *http.Request) error {
 
 	if file, err = f.a.Asset(p); err != nil {
 		return os.ErrNotExist
+	}
+
+	_, haveType := w.Header()["Content-Type"]
+	if !haveType {
+		if t := mime.TypeByExtension(path.Ext(p)); t != "" {
+			w.Header().Set("Content-Type", t)
+		}
 	}
 
 	reader := bufio.NewReader(file)
