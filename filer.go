@@ -13,8 +13,6 @@ import (
 	"net/http"
 	"os"
 	"path"
-	"path/filepath"
-	"strings"
 )
 
 // A Filer serves static resources.
@@ -30,7 +28,7 @@ var (
 // An Asseter resolves resources by name.
 type Asseter interface {
 	IsDir(name string) (bool, error)
-	Asset(name string) (io.Reader, error)
+	Asset(name string) (io.ReadCloser, error)
 }
 
 // ServeHTTP returns files from the file system. The file has to be located in the directory configured to the
@@ -56,19 +54,8 @@ func New(a Asseter) (*Filer, error) {
 	return &Filer{a: a}, nil
 }
 
-// NewFileSystemFiler creates a new filer. It will serve files relative to the current working directory.
-func NewFileSystemFiler(d string) (*Filer, error) {
-	wd, err := os.Getwd()
-	if err != nil {
-		return nil, err
-	}
-
-	p := path.Join(wd, d)
-	return &Filer{a: &fs{dir: p}}, nil
-}
-
 func (f *Filer) serveFile(w http.ResponseWriter, r *http.Request) error {
-	var file io.Reader
+	var file io.ReadCloser
 	var err error
 
 	p := r.URL.String()
@@ -82,6 +69,7 @@ func (f *Filer) serveFile(w http.ResponseWriter, r *http.Request) error {
 	if file, err = f.a.Asset(p); err != nil {
 		return os.ErrNotExist
 	}
+	defer file.Close()
 
 	_, haveType := w.Header()["Content-Type"]
 	if !haveType {
@@ -93,59 +81,4 @@ func (f *Filer) serveFile(w http.ResponseWriter, r *http.Request) error {
 	reader := bufio.NewReader(file)
 	reader.WriteTo(w)
 	return nil
-}
-
-type fs struct {
-	dir string
-}
-
-func (fs *fs) Asset(name string) (io.Reader, error) {
-	p := path.Join(fs.dir, name)
-
-	p = filepath.Clean(p)
-
-	if !strings.HasPrefix(p, fs.dir) {
-		return nil, errorForbidden
-	}
-
-	file, err := os.Open(p)
-	if err != nil {
-		return nil, err
-	}
-
-	defer file.Close()
-
-	d, err := file.Stat()
-	if err != nil {
-		return nil, err
-	}
-
-	if d.IsDir() {
-		return nil, errorNoFile
-	}
-
-	return file, nil
-}
-
-func (fs *fs) IsDir(name string) (bool, error) {
-	p := path.Join(fs.dir, name)
-	p = filepath.Clean(p)
-
-	if !strings.HasPrefix(p, fs.dir) {
-		return false, errorForbidden
-	}
-
-	file, err := os.Open(p)
-	if err != nil {
-		return false, err
-	}
-
-	defer file.Close()
-
-	d, err := file.Stat()
-	if err != nil {
-		return false, err
-	}
-
-	return d.IsDir(), nil
 }
