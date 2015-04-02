@@ -9,6 +9,7 @@ import (
 	"bufio"
 	"errors"
 	"io"
+	"log"
 	"mime"
 	"net/http"
 	"os"
@@ -17,7 +18,7 @@ import (
 
 // A Filer serves static resources.
 type Filer struct {
-	a Asseter
+	http.FileSystem
 }
 
 var (
@@ -50,26 +51,35 @@ func (f *Filer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 // New creates a new filer which uses the Asseter to retrieve assets.
-func New(a Asseter) (*Filer, error) {
-	return &Filer{a: a}, nil
+func New(fs http.FileSystem) (*Filer, error) {
+	return &Filer{fs}, nil
 }
 
 func (f *Filer) serveFile(w http.ResponseWriter, r *http.Request) error {
-	var file io.ReadCloser
-	var err error
-
 	p := r.URL.String()
 
-	if d, err := f.a.IsDir(p); d && err == nil {
-		p = path.Join(p, "index.html")
-	} else if err != nil {
+	file, err := f.FileSystem.Open(p)
+	if err != nil {
+		log.Println(err)
 		return err
 	}
 
-	if file, err = f.a.Asset(p); err != nil {
+	info, err := file.Stat()
+	if err != nil {
+		return err
+	}
+
+	if info.IsDir() {
+		p = path.Join(p, "index.html")
+		file, err = f.FileSystem.Open(p)
+		if err != nil {
+			return err
+		}
+	}
+
+	if file == nil {
 		return os.ErrNotExist
 	}
-	defer file.Close()
 
 	_, haveType := w.Header()["Content-Type"]
 	if !haveType {
